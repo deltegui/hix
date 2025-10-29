@@ -4,6 +4,8 @@
 
 Hix is a reactive, component-based Golang WASM frontend framework. Example:
 
+Here is the [demo](https://deltegui.github.io/hx/)
+
 ```go
 func counter() hx.INode {
 	c := hx.Signal(0)
