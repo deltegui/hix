@@ -25,7 +25,7 @@
             };
         }
 
-        WebAssembly.instantiateStreaming(fetch("http://deltegui.github.io/hx/main.wasm"), go.importObject)
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
             .then(result => {
                 go.run(result.instance);
             })
