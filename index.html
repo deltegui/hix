@@ -14,7 +14,6 @@
     <div class="container" id="wasm_mount_point">
         <!-- Go WASM content -->
     </div>
-    <script src="/app/wasm_exec.js"></script>
     <script type="text/javascript">
         const go = new Go();
 
@@ -25,7 +24,7 @@
             };
         }
 
-        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+        WebAssembly.instantiateStreaming(fetch("https://deltegui.github.io/hx/main.wasm"), go.importObject)
             .then(result => {
                 go.run(result.instance);
             })
