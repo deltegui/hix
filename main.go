@@ -1,10 +1,12 @@
-![logo](https://raw.githubusercontent.com/deltegui/hix/refs/heads/main/logo.png)
+package main
 
-# Hix
+import (
+	"fmt"
+	"strconv"
 
-Hix is a reactive, component-based Golang WASM frontend framework. Example:
+	"github.com/deltegui/hx"
+)
 
-```go
 func counter() hx.INode {
 	c := hx.Signal(0)
 	hx.EffectFunc(func() {
@@ -126,5 +128,3 @@ func main() {
 	)
 	select {}
 }
-
-```
