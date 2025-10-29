@@ -23,6 +23,7 @@ func counter() hx.INode {
 		Style("padding-right", "20px")
 	return hx.Div().Body(
 		hx.Button().
+			Class("btn", "btn primary").
 			Text("-").
 			Style("float", "left").
 			OnClick(func(ctx hx.EventContext) {
@@ -31,6 +32,7 @@ func counter() hx.INode {
 		div,
 		hx.Button().
 			Text("+").
+			Class("btn", "btn primary").
 			Style("float", "left").
 			OnClick(func(ctx hx.EventContext) {
 				c.Set(c.Get() + 1)
