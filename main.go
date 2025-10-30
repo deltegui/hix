@@ -2,129 +2,173 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/deltegui/hx"
 )
 
-func counter() hx.INode {
-	c := hx.Signal(0)
-	hx.EffectFunc(func() {
-		fmt.Println("Change!", c.Get())
-	})
-	str := hx.Computed(func() string {
-		return strconv.FormatInt(int64(c.Get()), 10)
-	})
-
-	div := hx.Div().
-		BindText(str).
-		Style("float", "left").
-		Style("padding-left", "20px").
-		Style("padding-right", "20px")
-	return hx.Div().Body(
-		hx.Button().
-			Text("-").
-			Style("float", "left").
-			OnClick(func(ctx hx.EventContext) {
-				c.Set(c.Get() - 1)
-			}),
-		div,
-		hx.Button().
-			Text("+").
-			Style("float", "left").
-			OnClick(func(ctx hx.EventContext) {
-				c.Set(c.Get() + 1)
-			}),
-	)
+func BSRow() hx.INode {
+	return hx.Div().Class("row")
 }
 
-func showMessage(msg string) hx.INode {
-	show := hx.Signal(false)
-	div := hx.Div().Id("43")
+func BSCol(size int) hx.INode {
+	colClass := fmt.Sprintf("col-%d", size)
+	return hx.Div().Class(colClass)
+}
 
+func DemoCounterPage() hx.INode {
+	c := hx.Signal(0)
+	cstr := hx.Computed(func() string {
+		return fmt.Sprintf("Current count %d", c.Get())
+	})
+	div := hx.Div()
 	hx.EffectFunc(func() {
 		div.Body(
-			hx.If(show, hx.P().Text(msg)),
-			hx.Button().Text("Toggle").OnClick(func(ctx hx.EventContext) {
-				show.Set(!show.Get())
-			}),
-			hx.A().Href("http://google.es").Text("Go to google"),
-		)
-	})
-
-	return div
-}
-
-func demoEach() hx.INode {
-	elements := hx.Signal([]string{})
-	textInput := hx.Signal("")
-
-	main := hx.Div()
-
-	hx.EffectFunc(func() {
-		input := hx.Input().BindOnInput(textInput)
-		addBtn := hx.Button().Text("Add").OnClick(func(ctx hx.EventContext) {
-			ee := elements.Get()
-			ee = append(ee, textInput.Get())
-			textInput.Set("")
-			elements.Set(ee)
-		})
-
-		main.Body(
-			input,
-			addBtn,
-			hx.Ul().Body(
-				hx.Each(elements, func(index int, value string) hx.INode {
-					return hx.Li().Body(
-						hx.P().Text(fmt.Sprintf("[%d] %s", index, value)),
-						hx.Button().Text("Delete").OnClick(func(ctx hx.EventContext) {
-							ee := elements.Get()
-							ee = append(ee[:index], ee[index+1:]...)
-							elements.Set(ee)
+			BSRow().Body(
+				BSCol(12).Body(
+					hx.P().Text("Demo of computed elements"),
+				),
+				BSCol(12).Body(
+					hx.Button().
+						Text("-").
+						Class("btn", "btn-primary").
+						OnClick(func(ctx hx.EventContext) {
+							c.Set(c.Get() - 1)
 						}),
-					)
-				}),
+					hx.Input().
+						BindValue(cstr).
+						Class("form-control").
+						Attribute("readonly", "readonly"),
+					hx.Button().
+						Text("+").
+						Class("btn", "btn-primary").
+						OnClick(func(ctx hx.EventContext) {
+							c.Set(c.Get() + 1)
+						}),
+				),
 			),
 		)
 	})
-	return hx.Div().Body(
-		hx.H1().Text("List of items"),
-		main,
-	)
+	return div
 }
 
-func reactTextInput() hx.INode {
-	text := hx.Signal("")
+func DemoInputPage() hx.INode {
+	txt := hx.Signal("")
 	return hx.Div().Body(
-		hx.P().BindText(text),
-		hx.Input().BindOnInput(text),
+		BSRow().Body(
+			BSCol(12).Body(
+				hx.H2().Text("Demo echo input"),
+				hx.P().Text("Write in this input. All you write will be echoed in the text area below. Demo of Hix reactivity"),
+			),
+			BSCol(12).Body(
+				hx.Input().
+					BindOnInput(txt).
+					Class("form-control"),
+			),
+			BSCol(12).Class("mt-3").Body(
+				hx.TextArea().
+					BindText(txt).
+					Class("form-control"),
+			),
+		),
 	)
 }
 
 func main() {
 	point := hx.NewFromId("wasm_mount_point")
+	tabs := bsTabsComponent{
+		Tabs: []BSTab{
+			{
+				Text:   "Demo input",
+				ID:     "demo_input",
+				Active: true,
+				Body:   DemoInputPage(),
+			},
+			{
+				Text: "Counter",
+				ID:   "counter",
+				Body: DemoCounterPage(),
+			},
+		},
+	}
 	point.Body(
-		hx.Div().Body(
-			hx.P().
-				Style("background-color", "blue").
-				Style("color", "white").
-				Text("Hola").
-				On(hx.EventClick, func(ctx hx.EventContext) {
-					ctx.Target.
-						Style("background-color", "black").
-						Style("color", "red")
-				}),
-			hx.Button().
-				Text("Show something in console").
-				On(hx.EventClick, func(ctx hx.EventContext) {
-					fmt.Println("Hi!")
-				}),
-			counter(),
-			hx.Br(),
-			showMessage("Toggle text"),
-			reactTextInput(),
-			demoEach(),
+		BSRow().Class("mt-4").Body(
+			BSCol(3).Body(
+				hx.Img().
+					Src("https://raw.githubusercontent.com/deltegui/hix/refs/heads/main/logo.png").
+					Class("img-thumbnail"),
+			),
+			BSCol(9).Body(
+				hx.H1().Text("Hix framework"),
+				hx.H3().Text("A simple golang wasm web framework!"),
+			),
+		),
+		BSRow().Class("mt-4").Body(
+			BSCol(12).Body(tabs.render()),
 		),
 	)
 	select {}
+}
+
+type BSTab struct {
+	Text     string
+	ID       string
+	Active   bool
+	Disabled bool
+	Body     hx.INode
+}
+
+type bsTabsComponent struct {
+	Tabs []BSTab
+}
+
+func (bs *bsTabsComponent) render() hx.INode {
+	signal := hx.Signal(bs.Tabs)
+
+	tabBodyList := hx.Div().Class("tab-content")
+	tabList := hx.Ul().Class("nav", "nav-tabs")
+	hx.EffectFunc(func() {
+		tabBodyList.Body(
+			hx.Each(signal, func(i int, value BSTab) hx.INode {
+				//fmt.Println("Render body!")
+				//fmt.Println(bs.Tabs)
+				div := hx.Div().
+					Class("tab-pane", "fade").
+					Id(value.ID).
+					Body(value.Body)
+				if value.Active {
+					div.Class("active", "show")
+				} else {
+					div.RemoveClass("active", "show")
+				}
+				return div
+			}),
+		)
+		tabList.Body(
+			hx.Each(signal, func(i int, value BSTab) hx.INode {
+				a := hx.A().Class("nav-link")
+				if value.Active {
+					a.Class("active")
+				}
+				if value.Disabled {
+					a.Class("disabled")
+				}
+				a.Text(value.Text)
+				a.OnClick(func(ctx hx.EventContext) {
+					//fmt.Println("Click!", i)
+					for i, tab := range bs.Tabs {
+						if tab.ID == value.ID {
+							bs.Tabs[i].Active = true
+						} else {
+							bs.Tabs[i].Active = false
+						}
+					}
+					//fmt.Println(bs.Tabs)
+					signal.Set(bs.Tabs)
+				})
+				return hx.Li().Class("nav-item").Body(a)
+			}),
+		)
+	})
+
+	return hx.Div().Body(tabList, tabBodyList)
 }
