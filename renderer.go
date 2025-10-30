@@ -144,7 +144,9 @@ func (element *VNode) syncNodes() bool {
 	if element.status == changeDeleted {
 		parent := element.father
 		if parent != nil {
-			parent.domElement.RemoveChild(element.domElement)
+			if element.haveDomElement {
+				parent.domElement.RemoveChild(element.domElement)
+			}
 			delete(element.renderer.markNodes, element)
 			element.father = nil
 		}

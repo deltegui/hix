@@ -8,6 +8,16 @@ func If(condition Gettable[bool], child INode) INode {
 	return element
 }
 
+func Show(condition Gettable[bool], ifPath, elsePath INode) INode {
+	var element INode = nil
+	if condition.Get() {
+		element = ifPath
+	} else {
+		element = elsePath
+	}
+	return element
+}
+
 func Each[T any](src Gettable[[]T], renderOne func(index int, value T) INode) INode {
 	list := src.Get()
 	result := make([]INode, len(list))

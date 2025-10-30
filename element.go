@@ -12,8 +12,9 @@ type EventContext struct {
 type Event string
 
 const (
-	EventClick Event = "click"
-	EventInput Event = "input"
+	EventClick  Event = "click"
+	EventInput  Event = "input"
+	EventChange Event = "change"
 )
 
 type changeStatus int
@@ -294,6 +295,14 @@ func (element *VNode) Id(id string) INode {
 	if element.id.assign(id, changeModified) {
 		element.mark()
 	}
+	return element
+}
+
+func (element *InputVNode) BindOnChange(signal Settable[string]) *InputVNode {
+	element.On(EventChange, func(ctx EventContext) {
+		input := ctx.Event.Target().(*dom.HTMLInputElement)
+		signal.Set(input.Value())
+	})
 	return element
 }
 
