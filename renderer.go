@@ -1,6 +1,7 @@
 package hx
 
 import (
+	"log"
 	"strings"
 	"syscall/js"
 
@@ -97,7 +98,49 @@ func (renderer renderer) generateCommonPathToRoot(currentPath []*VNode, markedNo
 	return currentPath
 }
 
+func (element *VNode) syncNoopNode() bool {
+	if element.status == changeDeleted {
+		parent := element.father
+		if parent != nil {
+			for _, child := range element.children {
+				if child.haveDomElement {
+					parent.domElement.RemoveChild(child.domElement)
+				}
+			}
+			delete(element.renderer.markNodes, element)
+			element.father = nil
+		}
+		return false
+	}
+
+	for index, child := range element.children {
+		if child == nil {
+			continue
+		}
+		keepChild := child.syncNodes()
+		if !keepChild {
+			element.father.children = removeListItem(element.father.children, index)
+		}
+	}
+
+	if element.status == changeNew {
+		element.status = unchanged
+		parent := element.father
+		if parent != nil && parent.haveDomElement {
+			for _, child := range element.children {
+				parent.domElement.AppendChild(child.domElement)
+			}
+		}
+	}
+
+	return true
+}
+
 func (element *VNode) syncNodes() bool {
+	if element.tag == noopIdNode {
+		return element.syncNoopNode()
+	}
+
 	if element.status == changeDeleted {
 		parent := element.father
 		if parent != nil {
@@ -108,12 +151,17 @@ func (element *VNode) syncNodes() bool {
 		return false
 	}
 	if element.status == changeNew {
-		domNode := dom.GetWindow().Document().CreateElement(element.tag)
-		element.domElement = domNode
+		if !element.haveDomElement && len(element.tag) != 0 {
+			domNode := dom.GetWindow().Document().CreateElement(element.tag)
+			element.domElement = domNode
+			element.haveDomElement = true
+		}
 		element.status = unchanged
 
 		parent := element.father
-		parent.domElement.AppendChild(domNode)
+		if parent != nil && parent.haveDomElement {
+			parent.domElement.AppendChild(element.domElement)
+		}
 	}
 
 	for index, child := range element.children {
@@ -193,6 +241,10 @@ func (element *VNode) updateStyles() {
 
 func (element *VNode) updateClasses() {
 	for class, status := range element.classes {
+		if strings.Contains(class, " ") {
+			log.Printf("Warning: ignoring class with spaces: %s", class)
+			continue
+		}
 		switch status {
 		case changeDeleted:
 			element.domElement.Class().Remove(class)

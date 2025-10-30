@@ -1,7 +1,6 @@
 package hx
 
 import (
-	"reflect"
 	"sync"
 )
 
@@ -32,9 +31,9 @@ func (signal *SignalT[T]) Get() T {
 }
 
 func (signal *SignalT[T]) Set(v T) {
-	if reflect.DeepEqual(signal.value, v) {
+	/*if reflect.DeepEqual(signal.value, v) {
 		return
-	}
+	}*/
 	signal.value = v
 	signal.notify()
 }

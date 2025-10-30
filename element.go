@@ -39,6 +39,7 @@ type INode interface {
 	Style(key, value string) INode
 	RemoveStyle(key string) INode
 	Class(classes ...string) INode
+	RemoveClass(classes ...string) INode
 
 	On(event Event, handler func(ctx EventContext)) INode
 	OnClick(handler func(ctx EventContext)) INode
@@ -55,7 +56,8 @@ const (
 )
 
 type VNode struct {
-	domElement dom.Element
+	domElement     dom.Element
+	haveDomElement bool
 
 	father *VNode
 	status changeStatus
@@ -79,6 +81,7 @@ func New(element dom.Element) *VNode {
 	VNode := newVNode(element.NodeName())
 	VNode.status = unchanged
 	VNode.domElement = element
+	VNode.haveDomElement = true
 	VNode.renderer = newRenderer(element)
 	return VNode
 }
@@ -332,12 +335,72 @@ func (element *InputVNode) BindOnInput(signal Settable[string]) *InputVNode {
 	return element
 }
 
+func (element *InputVNode) BindValue(signal Gettable[string]) *InputVNode {
+	v := signal.Get()
+	element.Attribute("value", v)
+	return element
+}
+
 func (e *InputVNode) Placeholder(v string) *InputVNode {
 	return e.Attribute("placeholder", v).(*InputVNode)
 }
 
 func (e *InputVNode) Type(v string) *InputVNode {
 	return e.Attribute("type", v).(*InputVNode)
+}
+
+const noopIdNode string = "noop"
+
+type NoopNode struct {
+	VNode
+}
+
+func asNoop(node *VNode) *NoopNode {
+	return &NoopNode{
+		*node,
+	}
+}
+
+func (nop *NoopNode) Id(id string) INode {
+	return nop
+}
+func (nop *NoopNode) Text(t string) INode {
+	return nop
+}
+func (nop *NoopNode) BindText(signal Gettable[string]) INode {
+	return nop
+}
+func (nop *NoopNode) Body(childs ...INode) INode {
+	nop.VNode.BodyList(childs)
+	return nop
+}
+func (nop *NoopNode) BodyList(childs []INode) INode {
+	nop.VNode.BodyList(childs)
+	return nop
+}
+func (nop *NoopNode) Attribute(key, value string) INode {
+	return nop
+}
+func (nop *NoopNode) RemoveAttribute(key string) INode {
+	return nop
+}
+func (nop *NoopNode) Style(key, value string) INode {
+	return nop
+}
+func (nop *NoopNode) RemoveStyle(key string) INode {
+	return nop
+}
+func (nop *NoopNode) Class(classes ...string) INode {
+	return nop
+}
+func (nop *NoopNode) RemoveClass(classes ...string) INode {
+	return nop
+}
+func (nop *NoopNode) On(event Event, handler func(ctx EventContext)) INode {
+	return nop
+}
+func (nop *NoopNode) OnClick(handler func(ctx EventContext)) INode {
+	return nop
 }
 
 func asVNode(i INode) *VNode {
@@ -347,6 +410,8 @@ func asVNode(i INode) *VNode {
 	case *InputVNode:
 		return &n.VNode
 	case *AVNode:
+		return &n.VNode
+	case *NoopNode:
 		return &n.VNode
 	default:
 		return nil
@@ -409,3 +474,5 @@ func Path() *VNode   { return newVNode("PATH") }
 
 func Br() *VNode { return newVNode("BR") }
 func Hr() *VNode { return newVNode("HR") }
+
+func Noop() *NoopNode { return asNoop(newVNode(noopIdNode)) }

@@ -1,5 +1,23 @@
 package hx
 
+type ValueWrapper[T any] struct {
+	inner T
+}
+
+func Value[T any](t T) ValueWrapper[T] {
+	return ValueWrapper[T]{
+		inner: t,
+	}
+}
+
+func (v ValueWrapper[T]) Get() T {
+	return v.inner
+}
+
+func (v *ValueWrapper[T]) Set(t T) {
+	v.inner = t
+}
+
 type singleValue[T any] struct {
 	value  T
 	status changeStatus
