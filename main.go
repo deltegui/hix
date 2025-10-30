@@ -73,6 +73,80 @@ func DemoInputPage() hx.INode {
 	)
 }
 
+func DemoTodoList() hx.INode {
+	type TodoItem struct {
+		Name string
+		Done bool
+	}
+
+	items := hx.Signal([]TodoItem{})
+	newItemString := hx.Signal("")
+
+	divInput := BSCol(10)
+	inputArea := BSCol(12).Body(BSRow().Body(
+		divInput,
+		BSCol(2).Body(
+			hx.Button().
+				Text("Add").
+				Class("btn", "btn-secondary").
+				OnClick(func(ctx hx.EventContext) {
+					it := items.Get()
+					str := newItemString.Get()
+					if len(str) == 0 {
+						return
+					}
+					it = append(it, TodoItem{
+						Name: str,
+						Done: false,
+					})
+					items.Set(it)
+					newItemString.Set("")
+				}),
+		),
+	))
+
+	hx.EffectFunc(func() {
+		divInput.Body(
+			hx.Input().BindOnChange(newItemString).BindValue(newItemString).Class("form-control"),
+		)
+	})
+
+	divList := BSCol(12)
+	hx.EffectFunc(func() {
+		divList.Body(
+			hx.Each(items, func(index int, item TodoItem) hx.INode {
+				return BSRow().Class("mt-2").Body(
+					BSCol(10).Body(
+						hx.Show(
+							hx.Value(item.Done),
+							hx.Div().Class("text-decoration-line-through").Text(item.Name),
+							hx.Div().Text(item.Name),
+						),
+					),
+					BSCol(2).Body(
+						hx.If(hx.Value(!item.Done), hx.Button().Class("btn", "btn-warning").Text("Done!").OnClick(func(ctx hx.EventContext) {
+							i := items.Get()
+							i[index].Done = true
+							items.Set(i)
+						})),
+						hx.If(hx.Value(item.Done), hx.Button().Class("btn", "btn-danger").Text("Delete").OnClick(func(ctx hx.EventContext) {
+							i := items.Get()
+							i = append(i[:index], i[index+1:]...)
+							items.Set(i)
+						})),
+					),
+				)
+			}),
+		)
+	})
+
+	return hx.Div().Body(
+		hx.H1().Text("Todo list!"),
+		inputArea,
+		divList,
+	)
+}
+
 func main() {
 	point := hx.NewFromId("wasm_mount_point")
 	tabs := bsTabsComponent{
@@ -88,6 +162,11 @@ func main() {
 				ID:   "counter",
 				Body: DemoCounterPage(),
 			},
+			{
+				Text: "TODO List",
+				ID:   "todo-list",
+				Body: DemoTodoList(),
+			},
 		},
 	}
 	point.Body(
@@ -100,7 +179,6 @@ func main() {
 			BSCol(9).Body(
 				hx.H1().Text("Hix framework"),
 				hx.H3().Text("A simple golang wasm web framework!"),
-				hx.A().Href("https://github.com/deltegui/hx/blob/demo/main.go").Text("Code"),
 			),
 		),
 		BSRow().Class("mt-4").Body(
