@@ -179,6 +179,7 @@ func main() {
 			BSCol(9).Body(
 				hx.H1().Text("Hix framework"),
 				hx.H3().Text("A simple golang wasm web framework!"),
+				hx.A().Href("https://github.com/deltegui/hx/blob/demo/main.go").Text("Code"),
 			),
 		),
 		BSRow().Class("mt-4").Body(
