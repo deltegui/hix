@@ -8,15 +8,15 @@ import (
 	"honnef.co/go/js/dom/v2"
 )
 
-type renderer struct {
+type DiffRenderer struct {
 	mountpoint  dom.Element
 	markNodes   map[*VNode]struct{}
 	scheduled   bool
 	rafCallback js.Func
 }
 
-func newRenderer(element dom.Element) *renderer {
-	r := &renderer{
+func newRenderer(element dom.Element) *DiffRenderer {
+	r := &DiffRenderer{
 		mountpoint: element,
 		markNodes:  map[*VNode]struct{}{},
 		scheduled:  false,
@@ -25,29 +25,29 @@ func newRenderer(element dom.Element) *renderer {
 	return r
 }
 
-func (r *renderer) mark(element *VNode) {
+func (r *DiffRenderer) Mark(element *VNode) {
 	r.markNodes[element] = struct{}{}
 }
 
-func (r *renderer) createRaf() {
+func (r *DiffRenderer) createRaf() {
 	r.rafCallback = js.FuncOf(func(this js.Value, args []js.Value) any {
-		r.Render()
+		r.render()
 		r.scheduled = false
 		return nil
 	})
 }
 
-func (r *renderer) scheduleRender() {
+func (r *DiffRenderer) ScheduleRender() {
 	if !r.scheduled {
 		r.scheduled = true
 		js.Global().Call("requestAnimationFrame", r.rafCallback)
 	}
 }
 
-func (renderer renderer) Render() {
+func (renderer DiffRenderer) render() {
 	rootLCA := renderer.GetMarkedCommonAncestor()
 	if rootLCA != nil {
-		rootLCA.syncNodes()
+		renderer.syncNodes(rootLCA)
 	}
 	for node := range renderer.markNodes {
 		node.render()
@@ -55,7 +55,7 @@ func (renderer renderer) Render() {
 	}
 }
 
-func (renderer renderer) GetMarkedCommonAncestor() *VNode {
+func (renderer DiffRenderer) GetMarkedCommonAncestor() *VNode {
 	if len(renderer.markNodes) == 0 {
 		return nil
 	}
@@ -75,7 +75,7 @@ func (renderer renderer) GetMarkedCommonAncestor() *VNode {
 	return path[0]
 }
 
-func (renderer renderer) generatePathToRoot(source *VNode) []*VNode {
+func (renderer DiffRenderer) generatePathToRoot(source *VNode) []*VNode {
 	path := []*VNode{source}
 	parent := source.father
 	for parent != nil {
@@ -85,7 +85,7 @@ func (renderer renderer) generatePathToRoot(source *VNode) []*VNode {
 	return path
 }
 
-func (renderer renderer) generateCommonPathToRoot(currentPath []*VNode, markedNode *VNode) []*VNode {
+func (renderer DiffRenderer) generateCommonPathToRoot(currentPath []*VNode, markedNode *VNode) []*VNode {
 	parent := markedNode.father
 	for parent != nil {
 		for pathNodeIndex, pathNode := range currentPath {
@@ -98,7 +98,7 @@ func (renderer renderer) generateCommonPathToRoot(currentPath []*VNode, markedNo
 	return currentPath
 }
 
-func (element *VNode) syncNoopNode() bool {
+func (renderer *DiffRenderer) syncNoopNode(element *VNode) bool {
 	if element.status == changeDeleted {
 		parent := element.father
 		if parent != nil {
@@ -107,7 +107,7 @@ func (element *VNode) syncNoopNode() bool {
 					parent.domElement.RemoveChild(child.domElement)
 				}
 			}
-			delete(element.renderer.markNodes, element)
+			delete(renderer.markNodes, element)
 			element.father = nil
 		}
 		return false
@@ -117,7 +117,7 @@ func (element *VNode) syncNoopNode() bool {
 		if child == nil {
 			continue
 		}
-		keepChild := child.syncNodes()
+		keepChild := renderer.syncNodes(child)
 		if !keepChild {
 			element.father.children = removeListItem(element.father.children, index)
 		}
@@ -136,9 +136,9 @@ func (element *VNode) syncNoopNode() bool {
 	return true
 }
 
-func (element *VNode) syncNodes() bool {
+func (renderer *DiffRenderer) syncNodes(element *VNode) bool {
 	if element.tag == noopIdNode {
-		return element.syncNoopNode()
+		return renderer.syncNoopNode(element)
 	}
 
 	if element.status == changeDeleted {
@@ -147,7 +147,7 @@ func (element *VNode) syncNodes() bool {
 			if element.haveDomElement {
 				parent.domElement.RemoveChild(element.domElement)
 			}
-			delete(element.renderer.markNodes, element)
+			delete(renderer.markNodes, element)
 			element.father = nil
 		}
 		return false
@@ -170,7 +170,7 @@ func (element *VNode) syncNodes() bool {
 		if child == nil {
 			continue
 		}
-		keepChild := child.syncNodes()
+		keepChild := renderer.syncNodes(child)
 		if !keepChild {
 			element.children = removeListItem(element.children, index)
 		}
@@ -182,6 +182,9 @@ func (element *VNode) syncNodes() bool {
 func (element *VNode) render() {
 	if element.text.status != unchanged {
 		element.updateText()
+	}
+	if element.value.status != unchanged {
+		element.updateValue()
 	}
 	if element.isDirty(flagEventListeners) {
 		element.updateEventListeners()
@@ -283,5 +286,11 @@ func (element *VNode) updateChildren() {
 
 func (element *VNode) updateText() {
 	element.domElement.SetTextContent(element.text.Value())
+	element.text.tick()
+}
+
+func (element *VNode) updateValue() {
+	jsVal := element.domElement.Underlying()
+	jsVal.Set("value", element.value.Value())
 	element.text.tick()
 }

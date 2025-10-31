@@ -4,6 +4,11 @@ import (
 	"honnef.co/go/js/dom/v2"
 )
 
+type Renderer interface {
+	ScheduleRender()
+	Mark(element *VNode)
+}
+
 type EventContext struct {
 	Target *VNode
 	Event  dom.Event
@@ -48,6 +53,8 @@ type INode interface {
 
 type dirtyFlag int
 
+const flagNumber = 5
+
 const (
 	flagStyles dirtyFlag = iota
 	flagClasses
@@ -63,11 +70,13 @@ type VNode struct {
 	father *VNode
 	status changeStatus
 
-	renderer *renderer
+	renderer     Renderer
+	haveRenderer bool
 
-	tag  string
-	id   diffValue[string]
-	text diffValue[string]
+	tag   string
+	id    diffValue[string]
+	text  diffValue[string]
+	value diffValue[string]
 
 	styles         map[string]diffValue[string]
 	classes        map[string]changeStatus
@@ -75,21 +84,37 @@ type VNode struct {
 	eventListeners map[Event]singleValue[func(EventContext)]
 	children       []*VNode
 
-	dirtyFlags [5]bool
+	dirtyFlags [flagNumber]bool
 }
 
-func New(element dom.Element) *VNode {
+func NewWithRenderer(element dom.Element, renderer Renderer) *VNode {
 	VNode := newVNode(element.NodeName())
 	VNode.status = unchanged
 	VNode.domElement = element
 	VNode.haveDomElement = true
-	VNode.renderer = newRenderer(element)
+	VNode.renderer = renderer
+	VNode.haveRenderer = true
 	return VNode
+}
+
+func New(element dom.Element) *VNode {
+	return NewWithRenderer(element, newRenderer(element))
 }
 
 func NewFromId(id string) *VNode {
 	mountPoint := dom.GetWindow().Document().GetElementByID(id)
 	return New(mountPoint)
+}
+
+func NewFromIdWithRenderer(id string, renderer Renderer) *VNode {
+	mountPoint := dom.GetWindow().Document().GetElementByID(id)
+	return NewWithRenderer(mountPoint, renderer)
+}
+
+func NewWithoutMount(tag string, renderer Renderer) *VNode {
+	VNode := newVNode(tag)
+	VNode.setRenderer(renderer, true)
+	return VNode
 }
 
 func newVNode(tag string) *VNode {
@@ -101,24 +126,25 @@ func newVNode(tag string) *VNode {
 		tag:            tag,
 		id:             diffValue[string]{},
 		text:           diffValue[string]{},
+		value:          diffValue[string]{},
 		styles:         map[string]diffValue[string]{},
 		classes:        map[string]changeStatus{},
 		attributes:     map[string]diffValue[string]{},
 		eventListeners: map[Event]singleValue[func(EventContext)]{},
 		children:       []*VNode{},
 
-		dirtyFlags: [5]bool{false},
+		dirtyFlags: [flagNumber]bool{false},
 	}
 }
 
 func (element *VNode) mark() {
-	if element.renderer != nil {
-		element.renderer.mark(element)
+	if element.haveRenderer {
+		element.renderer.Mark(element)
 	}
 }
 
 func (element *VNode) clearDirty() {
-	element.dirtyFlags = [5]bool{false}
+	element.dirtyFlags = [flagNumber]bool{false}
 }
 
 func (element *VNode) setDirty(flag dirtyFlag) {
@@ -130,17 +156,19 @@ func (element *VNode) isDirty(flag dirtyFlag) bool {
 	return element.dirtyFlags[flag]
 }
 
-func (element *VNode) setRenderer(renderer *renderer) {
+func (element *VNode) setRenderer(renderer Renderer, haveRenderer bool) {
 	element.renderer = renderer
+	element.haveRenderer = haveRenderer
 	for index := range element.children {
-		element.children[index].setRenderer(renderer)
+		element.children[index].setRenderer(renderer, haveRenderer)
+		element.children[index].haveRenderer = haveRenderer
 	}
 	element.setDirty(flagChildren)
 }
 
 func (element *VNode) scheludeRender() {
-	if element.renderer != nil {
-		element.renderer.scheduleRender()
+	if element.haveRenderer {
+		element.renderer.ScheduleRender()
 	}
 }
 
@@ -159,7 +187,7 @@ func (element *VNode) BodyList(childs []INode) INode {
 			continue
 		}
 		realNode.status = changeNew
-		realNode.setRenderer(element.renderer)
+		realNode.setRenderer(element.renderer, element.haveRenderer)
 		realNode.father = element
 		element.children = append(element.children, realNode)
 	}
@@ -331,9 +359,11 @@ func asInput(node *VNode) *InputVNode {
 	return &InputVNode{*node}
 }
 
-func (e *InputVNode) Value(v string) *InputVNode {
-	e.Attribute("value", v)
-	return e
+func (element *InputVNode) Value(t string) INode {
+	if element.value.assign(t, changeModified) {
+		element.mark()
+	}
+	return element
 }
 
 func (element *InputVNode) BindOnInput(signal Settable[string]) *InputVNode {
@@ -345,8 +375,9 @@ func (element *InputVNode) BindOnInput(signal Settable[string]) *InputVNode {
 }
 
 func (element *InputVNode) BindValue(signal Gettable[string]) *InputVNode {
-	v := signal.Get()
-	element.Attribute("value", v)
+	EffectFunc(func() {
+		element.Attribute("value", signal.Get())
+	})
 	return element
 }
 
@@ -356,6 +387,33 @@ func (e *InputVNode) Placeholder(v string) *InputVNode {
 
 func (e *InputVNode) Type(v string) *InputVNode {
 	return e.Attribute("type", v).(*InputVNode)
+}
+
+type TextAreaNode struct {
+	VNode
+}
+
+func asTextArea(node *VNode) *TextAreaNode {
+	return &TextAreaNode{
+		*node,
+	}
+}
+
+func (element *TextAreaNode) Value(t string) INode {
+	if element.value.assign(t, changeModified) {
+		element.mark()
+	}
+	return element
+}
+
+func (element *TextAreaNode) BindValue(signal Gettable[string]) *TextAreaNode {
+	EffectFunc(func() {
+		v := signal.Get()
+		element.Value(v)
+		element.Text(v)
+		element.scheludeRender()
+	})
+	return element
 }
 
 const noopIdNode string = "noop"
@@ -422,6 +480,8 @@ func asVNode(i INode) *VNode {
 		return &n.VNode
 	case *NoopNode:
 		return &n.VNode
+	case *TextAreaNode:
+		return &n.VNode
 	default:
 		return nil
 	}
@@ -440,18 +500,18 @@ func P() *VNode { return newVNode("P") }
 
 func Button() *VNode { return newVNode("BUTTON") }
 
-func A() *AVNode         { return newA(newVNode("A")) }
-func Span() *VNode       { return newVNode("SPAN") }
-func Strong() *VNode     { return newVNode("STRONG") }
-func Em() *VNode         { return newVNode("EM") }
-func Small() *VNode      { return newVNode("SMALL") }
-func Img() *VNode        { return newVNode("IMG") }
-func Input() *InputVNode { return asInput(newVNode("INPUT")) }
-func Label() *VNode      { return newVNode("LABEL") }
-func Form() *VNode       { return newVNode("FORM") }
-func Select() *VNode     { return newVNode("SELECT") }
-func Option() *VNode     { return newVNode("OPTION") }
-func TextArea() *VNode   { return newVNode("TEXTAREA") }
+func A() *AVNode              { return newA(newVNode("A")) }
+func Span() *VNode            { return newVNode("SPAN") }
+func Strong() *VNode          { return newVNode("STRONG") }
+func Em() *VNode              { return newVNode("EM") }
+func Small() *VNode           { return newVNode("SMALL") }
+func Img() *VNode             { return newVNode("IMG") }
+func Input() *InputVNode      { return asInput(newVNode("INPUT")) }
+func Label() *VNode           { return newVNode("LABEL") }
+func Form() *VNode            { return newVNode("FORM") }
+func Select() *VNode          { return newVNode("SELECT") }
+func Option() *VNode          { return newVNode("OPTION") }
+func TextArea() *TextAreaNode { return asTextArea(newVNode("TEXTAREA")) }
 
 func Ul() *VNode { return newVNode("UL") }
 func Ol() *VNode { return newVNode("OL") }
@@ -483,5 +543,8 @@ func Path() *VNode   { return newVNode("PATH") }
 
 func Br() *VNode { return newVNode("BR") }
 func Hr() *VNode { return newVNode("HR") }
+
+func Code() *VNode { return newVNode("CODE") }
+func Pre() *VNode  { return newVNode("PRE") }
 
 func Noop() *NoopNode { return asNoop(newVNode(noopIdNode)) }
