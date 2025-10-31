@@ -55,22 +55,27 @@ func DemoCounterPage() hx.INode {
 
 func DemoInputPage() hx.INode {
 	txt := hx.Signal("")
+
+	input := hx.Input()
+	hx.EffectFunc(func() {
+		input.BindOnInput(txt).
+			Class("form-control")
+	})
+	textArea := hx.TextArea()
+	hx.EffectFunc(func() {
+		textArea.
+			BindValue(txt).
+			Class("form-control")
+	})
+
 	return hx.Div().Body(
 		BSRow().Body(
 			BSCol(12).Body(
 				hx.H2().Text("Demo echo input"),
 				hx.P().Text("Type in this input. Everything you type will be echoed in the text area below. Demo of Hix reactivity."),
 			),
-			BSCol(12).Body(
-				hx.Input().
-					BindOnInput(txt).
-					Class("form-control"),
-			),
-			BSCol(12).Class("mt-3").Body(
-				hx.TextArea().
-					BindValue(txt).
-					Class("form-control"),
-			),
+			BSCol(12).Body(input),
+			BSCol(12).Class("mt-3").Body(textArea),
 		),
 	)
 }
