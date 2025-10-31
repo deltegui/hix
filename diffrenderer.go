@@ -291,6 +291,7 @@ func (element *VNode) updateText() {
 
 func (element *VNode) updateValue() {
 	jsVal := element.domElement.Underlying()
-	jsVal.Set("value", element.value.Value())
-	element.text.tick()
+	val := element.value.Value()
+	jsVal.Set("value", val)
+	element.value.tick()
 }

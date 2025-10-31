@@ -227,8 +227,10 @@ func (element *VNode) Text(t string) INode {
 }
 
 func (element *VNode) BindText(signal Gettable[string]) INode {
-	element.Text(signal.Get())
-	element.scheludeRender()
+	EffectFunc(func() {
+		element.Text(signal.Get())
+		element.scheludeRender()
+	})
 	return element
 }
 
@@ -374,8 +376,10 @@ func (element *InputVNode) BindOnInput(signal Settable[string]) *InputVNode {
 }
 
 func (element *InputVNode) BindValue(signal Gettable[string]) *InputVNode {
-	element.Value(signal.Get())
-	element.scheludeRender()
+	EffectFunc(func() {
+		element.Value(signal.Get())
+		element.scheludeRender()
+	})
 	return element
 }
 
@@ -405,10 +409,12 @@ func (element *TextAreaNode) Value(t string) INode {
 }
 
 func (element *TextAreaNode) BindValue(signal Gettable[string]) *TextAreaNode {
-	v := signal.Get()
-	element.Value(v)
-	element.Text(v)
-	element.scheludeRender()
+	EffectFunc(func() {
+		v := signal.Get()
+		element.Value(v)
+		element.Text(v)
+		element.scheludeRender()
+	})
 	return element
 }
 
