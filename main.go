@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/deltegui/hx"
+
+	"honnef.co/go/js/dom/v2"
 )
 
 func BSRow() hx.INode {
@@ -57,7 +59,7 @@ func DemoInputPage() hx.INode {
 		BSRow().Body(
 			BSCol(12).Body(
 				hx.H2().Text("Demo echo input"),
-				hx.P().Text("Write in this input. All you write will be echoed in the text area below. Demo of Hix reactivity"),
+				hx.P().Text("Type in this input. Everything you type will be echoed in the text area below. Demo of Hix reactivity."),
 			),
 			BSCol(12).Body(
 				hx.Input().
@@ -66,7 +68,7 @@ func DemoInputPage() hx.INode {
 			),
 			BSCol(12).Class("mt-3").Body(
 				hx.TextArea().
-					BindText(txt).
+					BindValue(txt).
 					Class("form-control"),
 			),
 		),
@@ -147,6 +149,36 @@ func DemoTodoList() hx.INode {
 	)
 }
 
+func DemoSSRRenderer() hx.INode {
+	return BSRow().Body(
+		BSCol(12).Body(
+			hx.P().Text("The string renderer simply outputs your components as pure HTML strings. There is no reactivity—just plain text. When you click the 'Render!' button, the following code is executed:"),
+			hx.Pre().Text(`renderer := &hx.StringRenderer{}
+point := hx.NewWithoutMount("div", renderer)
+point.Body(hx.Br(), DemoTodoList())
+renderer.Render(point)
+output := dom.GetWindow().Document().GetElementByID("stringRendererOutput")
+output.SetInnerHTML(renderer.String())
+text := dom.GetWindow().Document().GetElementByID("stringRendererText")
+text.SetTextContent(renderer.String())`),
+			hx.Button().Text("Render!").Class("btn", "btn-primary").OnClick(func(ctx hx.EventContext) {
+				renderer := &hx.StringRenderer{}
+				point := hx.NewWithoutMount("div", renderer)
+				point.Body(hx.Br(), DemoTodoList())
+				renderer.Render(point)
+				output := dom.GetWindow().Document().GetElementByID("stringRendererOutput")
+				output.SetInnerHTML(renderer.String())
+				text := dom.GetWindow().Document().GetElementByID("stringRendererText")
+				text.SetTextContent(renderer.String())
+			}),
+		),
+		BSCol(12).Body(hx.H1().Text("Interpreted HTML:")),
+		BSCol(12).Class("card").Id("stringRendererOutput"),
+		BSCol(12).Body(hx.H1().Text("Output HTML string:")),
+		BSCol(12).Body(hx.TextArea().Class("form-control").Id("stringRendererText")),
+	)
+}
+
 func main() {
 	point := hx.NewFromId("wasm_mount_point")
 	tabs := bsTabsComponent{
@@ -167,8 +199,14 @@ func main() {
 				ID:   "todo-list",
 				Body: DemoTodoList(),
 			},
+			{
+				Text: "String Renderer",
+				ID:   "ssr-renderer",
+				Body: DemoSSRRenderer(),
+			},
 		},
 	}
+
 	point.Body(
 		BSRow().Class("mt-4").Body(
 			BSCol(3).Body(
@@ -186,6 +224,8 @@ func main() {
 			BSCol(12).Body(tabs.render()),
 		),
 	)
+
+	fmt.Println()
 	select {}
 }
 
