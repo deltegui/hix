@@ -24,7 +24,7 @@
             };
         }
 
-        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+        WebAssembly.instantiateStreaming(fetch("main.wasm.gz"), go.importObject)
             .then(result => {
                 go.run(result.instance);
             })
