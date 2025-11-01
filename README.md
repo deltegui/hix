@@ -2,131 +2,25 @@
 
 # Hix
 
-Hix is a reactive, component-based Golang WASM frontend framework. Example:
+Hix is a reactive frontend library for Go (WASM).
+It aims to be **small, simple, and predictable**.
 
-Here is the [demo](https://deltegui.github.io/hx/)
+In around 1K lines of code, it can:
 
-```go
-func counter() hx.INode {
-	c := hx.Signal(0)
-	hx.EffectFunc(func() {
-		fmt.Println("Change!", c.Get())
-	})
-	str := hx.Computed(func() string {
-		return strconv.FormatInt(int64(c.Get()), 10)
-	})
+* Write HTML in plain old Go. No code generation needed. No strange mixed files without editor support.
 
-	div := hx.Div().
-		BindText(str).
-		Style("float", "left").
-		Style("padding-left", "20px").
-		Style("padding-right", "20px")
-	return hx.Div().Body(
-		hx.Button().
-			Text("-").
-			Style("float", "left").
-			OnClick(func(ctx hx.EventContext) {
-				c.Set(c.Get() - 1)
-			}),
-		div,
-		hx.Button().
-			Text("+").
-			Style("float", "left").
-			OnClick(func(ctx hx.EventContext) {
-				c.Set(c.Get() + 1)
-			}),
-	)
-}
+* Handle JavaScript events directly.
 
-func showMessage(msg string) hx.INode {
-	show := hx.Signal(false)
-	div := hx.Div().Id("43")
+* Provide reactivity using **Signals**, **Computed**, and **Effects** (the *Solid.js* model).
 
-	hx.EffectFunc(func() {
-		div.Body(
-			hx.If(show, hx.P().Text(msg)),
-			hx.Button().Text("Toggle").OnClick(func(ctx hx.EventContext) {
-				show.Set(!show.Get())
-			}),
-			hx.A().Href("http://google.es").Text("Go to google"),
-		)
-	})
+* Update the DOM efficiently — only when changes occur, minimizing Go ↔ JS calls.
 
-	return div
-}
+* Work seamlessly with **TinyGo**, reducing bundle sizes dramatically.
 
-func demoEach() hx.INode {
-	elements := hx.Signal([]string{})
-	textInput := hx.Signal("")
+Hix only depends on *honnef.co/go/dom/v2*.
 
-	main := hx.Div()
+Hix doesn’t try to be a full-fledged framework — it’s just a library for writing reactive web interfaces in Go.
 
-	hx.EffectFunc(func() {
-		input := hx.Input().BindOnInput(textInput)
-		addBtn := hx.Button().Text("Add").OnClick(func(ctx hx.EventContext) {
-			ee := elements.Get()
-			ee = append(ee, textInput.Get())
-			textInput.Set("")
-			elements.Set(ee)
-		})
+If you need a full framework to build PWAs or complex applications, try go-app.
 
-		main.Body(
-			input,
-			addBtn,
-			hx.Ul().Body(
-				hx.Each(elements, func(index int, value string) hx.INode {
-					return hx.Li().Body(
-						hx.P().Text(fmt.Sprintf("[%d] %s", index, value)),
-						hx.Button().Text("Delete").OnClick(func(ctx hx.EventContext) {
-							ee := elements.Get()
-							ee = append(ee[:index], ee[index+1:]...)
-							elements.Set(ee)
-						}),
-					)
-				}),
-			),
-		)
-	})
-	return hx.Div().Body(
-		hx.H1().Text("List of items"),
-		main,
-	)
-}
-
-func reactTextInput() hx.INode {
-	text := hx.Signal("")
-	return hx.Div().Body(
-		hx.P().BindText(text),
-		hx.Input().BindOnInput(text),
-	)
-}
-
-func main() {
-	point := hx.NewFromId("wasm_mount_point")
-	point.Body(
-		hx.Div().Body(
-			hx.P().
-				Style("background-color", "blue").
-				Style("color", "white").
-				Text("Hola").
-				On(hx.EventClick, func(ctx hx.EventContext) {
-					ctx.Target.
-						Style("background-color", "black").
-						Style("color", "red")
-				}),
-			hx.Button().
-				Text("Show something in console").
-				On(hx.EventClick, func(ctx hx.EventContext) {
-					fmt.Println("Hi!")
-				}),
-			counter(),
-			hx.Br(),
-			showMessage("Toggle text"),
-			reactTextInput(),
-			demoEach(),
-		),
-	)
-	select {}
-}
-
-```
+Example using TinyGo (just 1.5 MB of WASM): [demo](https://deltegui.github.io/hx/)
