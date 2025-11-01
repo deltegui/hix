@@ -24,7 +24,7 @@
             };
         }
 
-        fetch('main.wasm.br')
+        fetch('main.wasm.gz')
             .then(res => res.arrayBuffer())
             .then(buffer => {
                 const decompressed = pako.ungzip(new Uint8Array(buffer));
