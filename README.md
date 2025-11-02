@@ -39,4 +39,4 @@ Thanks to TinyGo and Hix simplicity, the example shown above can achieve these s
 
 The Go WASM ecosystem feels somewhat abandoned. Vecty hasn’t received updates in four years. Vugu also hasn’t had any major updates for quite some time (and .vugu files have little to no support in editors). go-app seems to be the way to go, but it’s mainly oriented towards building PWAs.
 
-I needed interactivity for a project that already uses backend rendering, but I didn’t want to rely on the Node.js ecosystem — they don’t seem to care much about dependency hell or breaking changes, which compromises long-term maintainability. I started Hix as a small demo, but I liked it so much that I began using it in my side project.
+I needed interactivity for a project that already uses backend rendering, but I didn’t want to rely on the Node.js ecosystem — they don’t seem to care much about having a ton of dependencies, dependency hell or breaking changes, which compromises long-term maintainability. I started Hix as a small demo, but I liked it so much that I began using it in my side project.
