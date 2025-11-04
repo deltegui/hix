@@ -23,7 +23,7 @@ Hix doesn’t try to be a full-fledged framework — it’s just a library for w
 
 If you need a full framework to build PWAs or complex applications, try go-app.
 
-Example with code using TinyGo (just 1.5 MB of WASM, 191K gzip): [Hix example](https://deltegui.github.io/hx/).
+Example with code using TinyGo (just 631K of WASM, 191K gzip): [Hix example](https://deltegui.github.io/hx/).
 
 Thanks to TinyGo and Hix simplicity, the example shown above can achieve these sizes:
 
