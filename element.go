@@ -10,7 +10,7 @@ type Renderer interface {
 }
 
 type EventContext struct {
-	Target *VNode
+	Target INode
 	Event  dom.Event
 }
 
@@ -32,6 +32,8 @@ const (
 )
 
 type INode interface {
+	AsVNode() *VNode
+
 	Id(id string) INode
 
 	Text(t string) INode
@@ -68,6 +70,7 @@ type VNode struct {
 	haveDomElement bool
 
 	father *VNode
+	Owner  INode
 	status changeStatus
 
 	renderer     Renderer
@@ -118,7 +121,7 @@ func NewWithoutMount(tag string, renderer Renderer) *VNode {
 }
 
 func newVNode(tag string) *VNode {
-	return &VNode{
+	vnode := &VNode{
 		status: changeNew,
 
 		father: nil,
@@ -135,6 +138,12 @@ func newVNode(tag string) *VNode {
 
 		dirtyFlags: [flagNumber]bool{false},
 	}
+	vnode.Owner = vnode
+	return vnode
+}
+
+func (element *VNode) AsVNode() *VNode {
+	return element
 }
 
 func (element *VNode) mark() {
@@ -178,14 +187,17 @@ func (element *VNode) Body(childs ...INode) INode {
 
 func (element *VNode) BodyList(childs []INode) INode {
 	for _, child := range element.children {
+		if child == nil {
+			continue
+		}
 		child.status = changeDeleted
 	}
 
 	for _, child := range childs {
-		realNode := asVNode(child)
 		if child == nil {
 			continue
 		}
+		realNode := asVNode(child)
 		realNode.status = changeNew
 		realNode.setRenderer(element.renderer, element.haveRenderer)
 		realNode.father = element
@@ -203,7 +215,9 @@ func (element *VNode) On(event Event, handler func(ctx EventContext)) INode {
 	if !ok {
 		element.eventListeners[event] = singleValue[func(EventContext)]{
 			value: func(ctx EventContext) {
-				handler(ctx)
+				invalidateEffects(func() {
+					handler(ctx)
+				})
 				element.scheludeRender()
 			},
 			status: changeNew,
@@ -236,6 +250,9 @@ func (element *VNode) BindText(signal Gettable[string]) INode {
 
 func (element *VNode) Class(classes ...string) INode {
 	for _, create := range classes {
+		if len(create) <= 0 {
+			continue
+		}
 		_, ok := element.classes[create]
 		if !ok {
 			element.classes[create] = changeNew
@@ -247,6 +264,9 @@ func (element *VNode) Class(classes ...string) INode {
 
 func (element *VNode) RemoveClass(classes ...string) INode {
 	for _, remove := range classes {
+		if len(remove) <= 0 {
+			continue
+		}
 		_, ok := element.classes[remove]
 		if ok {
 			element.classes[remove] = changeDeleted
@@ -257,6 +277,10 @@ func (element *VNode) RemoveClass(classes ...string) INode {
 }
 
 func (element *VNode) Attribute(key, value string) INode {
+	if len(key) <= 0 || len(value) <= 0 {
+		return element
+	}
+
 	oldValue, ok := element.attributes[key]
 	if ok && oldValue.equals(value) {
 		return element
@@ -341,6 +365,7 @@ type AVNode struct {
 }
 
 func newA(element *VNode) *AVNode {
+	element.Owner = element
 	return &AVNode{
 		*element,
 	}
@@ -356,7 +381,9 @@ type InputVNode struct {
 }
 
 func asInput(node *VNode) *InputVNode {
-	return &InputVNode{*node}
+	input := &InputVNode{*node}
+	input.Owner = input
+	return input
 }
 
 func (element *InputVNode) Value(t string) INode {
@@ -396,9 +423,11 @@ type TextAreaNode struct {
 }
 
 func asTextArea(node *VNode) *TextAreaNode {
-	return &TextAreaNode{
+	textArea := &TextAreaNode{
 		*node,
 	}
+	textArea.Owner = textArea
+	return textArea
 }
 
 func (element *TextAreaNode) Value(t string) INode {
@@ -418,6 +447,31 @@ func (element *TextAreaNode) BindValue(signal Gettable[string]) *TextAreaNode {
 	return element
 }
 
+type OptionNode struct {
+	VNode
+}
+
+func asOption(node *VNode) *OptionNode {
+	option := &OptionNode{
+		*node,
+	}
+	option.Owner = option
+	return option
+}
+
+func (element *OptionNode) Value(t string) *OptionNode {
+	if element.value.assign(t, changeModified) {
+		element.mark()
+	}
+	return element
+}
+
+func (element *OptionNode) Selected() *OptionNode {
+	element.Attribute("selected", "selected")
+	element.mark()
+	return element
+}
+
 const noopIdNode string = "noop"
 
 type NoopNode struct {
@@ -425,9 +479,11 @@ type NoopNode struct {
 }
 
 func asNoop(node *VNode) *NoopNode {
-	return &NoopNode{
+	noop := &NoopNode{
 		*node,
 	}
+	noop.Owner = noop
+	return noop
 }
 
 func (nop *NoopNode) Id(id string) INode {
@@ -473,20 +529,7 @@ func (nop *NoopNode) OnClick(handler func(ctx EventContext)) INode {
 }
 
 func asVNode(i INode) *VNode {
-	switch n := i.(type) {
-	case *VNode:
-		return n
-	case *InputVNode:
-		return &n.VNode
-	case *AVNode:
-		return &n.VNode
-	case *NoopNode:
-		return &n.VNode
-	case *TextAreaNode:
-		return &n.VNode
-	default:
-		return nil
-	}
+	return i.AsVNode()
 }
 
 func H1() *VNode { return newVNode("H1") }
@@ -502,6 +545,8 @@ func P() *VNode { return newVNode("P") }
 
 func Button() *VNode { return newVNode("BUTTON") }
 
+func I() *VNode { return newVNode("I") }
+
 func A() *AVNode              { return newA(newVNode("A")) }
 func Span() *VNode            { return newVNode("SPAN") }
 func Strong() *VNode          { return newVNode("STRONG") }
@@ -512,7 +557,7 @@ func Input() *InputVNode      { return asInput(newVNode("INPUT")) }
 func Label() *VNode           { return newVNode("LABEL") }
 func Form() *VNode            { return newVNode("FORM") }
 func Select() *VNode          { return newVNode("SELECT") }
-func Option() *VNode          { return newVNode("OPTION") }
+func Option() *OptionNode     { return asOption(newVNode("OPTION")) }
 func TextArea() *TextAreaNode { return asTextArea(newVNode("TEXTAREA")) }
 
 func Ul() *VNode { return newVNode("UL") }

@@ -1,8 +1,33 @@
 package hx
 
 import (
+	"fmt"
 	"sync"
 )
+
+var (
+	canDeclareEffects       bool = true
+	canDeclareEffectsMutext sync.Mutex
+)
+
+func setCanDelcareEffects(b bool) {
+	canDeclareEffectsMutext.Lock()
+	canDeclareEffects = b
+	canDeclareEffectsMutext.Unlock()
+}
+
+func getCanDelcareEffects() bool {
+	canDeclareEffectsMutext.Lock()
+	b := canDeclareEffects
+	canDeclareEffectsMutext.Unlock()
+	return b
+}
+
+func invalidateEffects(handle func()) {
+	setCanDelcareEffects(false)
+	handle()
+	setCanDelcareEffects(true)
+}
 
 var (
 	currentEffect *Effect
@@ -25,6 +50,9 @@ func (signal *SignalT[T]) Get() T {
 	mu.Lock()
 	if currentEffect != nil {
 		signal.subscribers[currentEffect] = struct{}{}
+		currentEffect.cleanUps = append(currentEffect.cleanUps, func() {
+			delete(signal.subscribers, currentEffect)
+		})
 	}
 	mu.Unlock()
 	return signal.value
@@ -51,11 +79,24 @@ func (signal *SignalT[T]) notify() {
 type Effect struct {
 	fn          func()
 	isScheduled bool
+	childs      []*Effect
+	cleanUps    []func()
 }
 
 func EffectFunc(fn func()) *Effect {
+	if !getCanDelcareEffects() {
+		fmt.Println("Warning: You cannot declare Effects inside a event handler. This event will be omitted")
+		fn()
+		return nil
+	}
+
 	e := &Effect{
-		fn: fn,
+		fn:       fn,
+		childs:   make([]*Effect, 0),
+		cleanUps: make([]func(), 0),
+	}
+	if currentEffect != nil {
+		currentEffect.childs = append(currentEffect.childs, e)
 	}
 	e.run()
 	return e
@@ -67,11 +108,25 @@ func (e *Effect) run() {
 	currentEffect = e
 	mu.Unlock()
 
+	e.clean()
 	e.fn()
 
 	mu.Lock()
 	currentEffect = prev
 	mu.Unlock()
+}
+
+func (e *Effect) clean() {
+	for _, child := range e.childs {
+		child.clean()
+	}
+	e.childs = []*Effect{}
+
+	for _, cleanfn := range e.cleanUps {
+		cleanfn()
+	}
+	e.cleanUps = make([]func(), 0)
+
 }
 
 func (e *Effect) schedule() {

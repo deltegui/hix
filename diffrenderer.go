@@ -113,15 +113,17 @@ func (renderer *DiffRenderer) syncNoopNode(element *VNode) bool {
 		return false
 	}
 
-	for index, child := range element.children {
+	childs := make([]*VNode, 0, len(element.children))
+	for _, child := range element.children {
 		if child == nil {
 			continue
 		}
 		keepChild := renderer.syncNodes(child)
-		if !keepChild {
-			element.father.children = removeListItem(element.father.children, index)
+		if keepChild {
+			childs = append(childs, child)
 		}
 	}
+	element.children = childs
 
 	if element.status == changeNew {
 		element.status = unchanged
@@ -166,20 +168,26 @@ func (renderer *DiffRenderer) syncNodes(element *VNode) bool {
 		}
 	}
 
-	for index, child := range element.children {
+	childs := make([]*VNode, 0, len(element.children))
+	for _, child := range element.children {
 		if child == nil {
 			continue
 		}
 		keepChild := renderer.syncNodes(child)
-		if !keepChild {
-			element.children = removeListItem(element.children, index)
+		if keepChild {
+			childs = append(childs, child)
 		}
 	}
+	element.children = childs
 
 	return true
 }
 
 func (element *VNode) render() {
+	if element.domElement == nil {
+		return
+	}
+
 	if element.text.status != unchanged {
 		element.updateText()
 	}
@@ -253,10 +261,13 @@ func (element *VNode) updateClasses() {
 		switch status {
 		case changeDeleted:
 			element.domElement.Class().Remove(class)
+			delete(element.classes, class)
 		case changeNew:
 			element.domElement.Class().Add(class)
+			element.classes[class] = unchanged
+		default:
+			element.classes[class] = unchanged
 		}
-		element.classes[class] = unchanged
 	}
 }
 
@@ -267,7 +278,7 @@ func (element *VNode) updateEventListeners() {
 			currentListener := listener
 			element.domElement.AddEventListener(string(event), false, func(e dom.Event) {
 				currentListener.value(EventContext{
-					Target: element,
+					Target: element.Owner,
 					Event:  e,
 				})
 			})
