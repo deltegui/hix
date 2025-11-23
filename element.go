@@ -20,6 +20,7 @@ const (
 	EventClick  Event = "click"
 	EventInput  Event = "input"
 	EventChange Event = "change"
+	EventKeyUp  Event = "keyup"
 )
 
 type changeStatus int
@@ -44,10 +45,17 @@ type INode interface {
 
 	Attribute(key, value string) INode
 	RemoveAttribute(key string) INode
+	GetAttribute(key string) string
+	HaveAttribute(key, value string) bool
+
 	Style(key, value string) INode
 	RemoveStyle(key string) INode
+	GetStyle(key string) string
+	HaveStyle(key, value string) bool
+
 	Class(classes ...string) INode
 	RemoveClass(classes ...string) INode
+	HaveClass(class string) bool
 
 	On(event Event, handler func(ctx EventContext)) INode
 	OnClick(handler func(ctx EventContext)) INode
@@ -142,6 +150,10 @@ func newVNode(tag string) *VNode {
 	return vnode
 }
 
+func (element *VNode) Underlying() dom.Element {
+	return element.domElement
+}
+
 func (element *VNode) AsVNode() *VNode {
 	return element
 }
@@ -215,7 +227,7 @@ func (element *VNode) On(event Event, handler func(ctx EventContext)) INode {
 	if !ok {
 		element.eventListeners[event] = singleValue[func(EventContext)]{
 			value: func(ctx EventContext) {
-				invalidateEffects(func() {
+				Untrack(func() {
 					handler(ctx)
 				})
 				element.scheludeRender()
@@ -276,6 +288,11 @@ func (element *VNode) RemoveClass(classes ...string) INode {
 	return element
 }
 
+func (element *VNode) HaveClass(class string) bool {
+	changeStatus, ok := element.classes[class]
+	return ok && changeStatus != changeDeleted
+}
+
 func (element *VNode) Attribute(key, value string) INode {
 	if len(key) <= 0 || len(value) <= 0 {
 		return element
@@ -310,6 +327,22 @@ func (element *VNode) RemoveAttribute(key string) INode {
 	return element
 }
 
+func (element *VNode) GetAttribute(key string) string {
+	value, ok := element.attributes[key]
+	if !ok {
+		return ""
+	}
+	if value.status == changeDeleted {
+		return ""
+	}
+	return value.Value()
+}
+
+func (element *VNode) HaveAttribute(key, value string) bool {
+	v, ok := element.attributes[key]
+	return ok && v.status != changeDeleted && v.Value() == value
+}
+
 func (element *VNode) Style(key, value string) INode {
 	oldValue, ok := element.styles[key]
 	if ok && oldValue.equals(value) {
@@ -326,6 +359,7 @@ func (element *VNode) Style(key, value string) INode {
 	element.styles[key] = oldValue
 
 	element.setDirty(flagStyles)
+	element.scheludeRender()
 	return element
 }
 
@@ -338,6 +372,22 @@ func (element *VNode) RemoveStyle(key string) INode {
 	element.styles[key] = current
 	element.setDirty(flagStyles)
 	return element
+}
+
+func (element *VNode) GetStyle(key string) string {
+	value, ok := element.styles[key]
+	if !ok {
+		return ""
+	}
+	if value.status == changeDeleted {
+		return ""
+	}
+	return value.value
+}
+
+func (element *VNode) HaveStyle(key, value string) bool {
+	v, ok := element.styles[key]
+	return ok && v.status != changeDeleted && v.Value() == value
 }
 
 func (element *VNode) Id(id string) INode {
@@ -355,6 +405,11 @@ func (element *InputVNode) BindOnChange(signal Settable[string]) *InputVNode {
 		input := ctx.Event.Target().(*dom.HTMLInputElement)
 		signal.Set(input.Value())
 	})
+	return element
+}
+
+func (element *InputVNode) OnKeyUp(handler func(ctx EventContext)) *InputVNode {
+	element.On(EventKeyUp, handler)
 	return element
 }
 
@@ -411,11 +466,13 @@ func (element *InputVNode) BindValue(signal Gettable[string]) *InputVNode {
 }
 
 func (e *InputVNode) Placeholder(v string) *InputVNode {
-	return e.Attribute("placeholder", v).(*InputVNode)
+	e.Attribute("placeholder", v)
+	return e
 }
 
 func (e *InputVNode) Type(v string) *InputVNode {
-	return e.Attribute("type", v).(*InputVNode)
+	e.Attribute("type", v)
+	return e
 }
 
 type TextAreaNode struct {

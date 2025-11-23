@@ -2,37 +2,21 @@ package hx
 
 import (
 	"fmt"
+	"runtime/debug"
 	"sync"
 )
 
 var (
-	canDeclareEffects       bool = true
-	canDeclareEffectsMutext sync.Mutex
-)
-
-func setCanDelcareEffects(b bool) {
-	canDeclareEffectsMutext.Lock()
-	canDeclareEffects = b
-	canDeclareEffectsMutext.Unlock()
-}
-
-func getCanDelcareEffects() bool {
-	canDeclareEffectsMutext.Lock()
-	b := canDeclareEffects
-	canDeclareEffectsMutext.Unlock()
-	return b
-}
-
-func invalidateEffects(handle func()) {
-	setCanDelcareEffects(false)
-	handle()
-	setCanDelcareEffects(true)
-}
-
-var (
 	currentEffect *Effect
+	untrack       bool
 	mu            sync.Mutex
 )
+
+func accessEffect(action func(*Effect)) {
+	mu.Lock()
+	action(currentEffect)
+	mu.Unlock()
+}
 
 type SignalT[T any] struct {
 	value       T
@@ -47,14 +31,16 @@ func Signal[T any](initial T) *SignalT[T] {
 }
 
 func (signal *SignalT[T]) Get() T {
-	mu.Lock()
-	if currentEffect != nil {
-		signal.subscribers[currentEffect] = struct{}{}
-		currentEffect.cleanUps = append(currentEffect.cleanUps, func() {
-			delete(signal.subscribers, currentEffect)
-		})
-	}
-	mu.Unlock()
+	accessEffect(func(currentEffect *Effect) {
+		if currentEffect != nil {
+			signal.subscribers[currentEffect] = struct{}{}
+			currentEffect.cleanUps = append(currentEffect.cleanUps, func() {
+				delete(signal.subscribers, currentEffect)
+			})
+		} else if !untrack {
+			fmt.Printf("Cannot call Signal.Get if there is no effect in %s\n", debug.Stack())
+		}
+	})
 	return signal.value
 }
 
@@ -81,20 +67,16 @@ type Effect struct {
 }
 
 func EffectFunc(fn func()) *Effect {
-	if !getCanDelcareEffects() {
-		fmt.Println("Warning: You cannot declare Effects inside a event handler. This event will be omitted")
-		fn()
-		return nil
-	}
-
 	e := &Effect{
 		fn:       fn,
 		childs:   make([]*Effect, 0),
 		cleanUps: make([]func(), 0),
 	}
-	if currentEffect != nil {
-		currentEffect.childs = append(currentEffect.childs, e)
-	}
+	accessEffect(func(currentEffect *Effect) {
+		if currentEffect != nil {
+			currentEffect.childs = append(currentEffect.childs, e)
+		}
+	})
 	e.run()
 	return e
 }
@@ -158,11 +140,11 @@ func Computed[T comparable](fn func() T) *ComputedT[T] {
 }
 
 func (c *ComputedT[T]) Get() T {
-	mu.Lock()
-	if currentEffect != nil {
-		c.subscribers[currentEffect] = struct{}{}
-	}
-	mu.Unlock()
+	accessEffect(func(currentEffect *Effect) {
+		if currentEffect != nil {
+			c.subscribers[currentEffect] = struct{}{}
+		}
+	})
 	return c.value
 }
 
@@ -170,6 +152,38 @@ func (c *ComputedT[T]) notify() {
 	for effect := range c.subscribers {
 		effect.schedule()
 	}
+}
+
+func Untrack(fn func()) {
+	mu.Lock()
+	prev := currentEffect
+	untrack = true
+	currentEffect = nil
+	mu.Unlock()
+
+	fn()
+
+	mu.Lock()
+	currentEffect = prev
+	untrack = false
+	mu.Unlock()
+}
+
+func UntrackGet[T any](gettable Gettable[T]) T {
+	mu.Lock()
+	prev := currentEffect
+	untrack = true
+	currentEffect = nil
+	mu.Unlock()
+
+	value := gettable.Get()
+
+	mu.Lock()
+	currentEffect = prev
+	untrack = false
+	mu.Unlock()
+
+	return value
 }
 
 type Gettable[T any] interface {

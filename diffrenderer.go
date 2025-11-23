@@ -146,7 +146,7 @@ func (renderer *DiffRenderer) syncNodes(element *VNode) bool {
 	if element.status == changeDeleted {
 		parent := element.father
 		if parent != nil {
-			if element.haveDomElement {
+			if element.haveDomElement && parent.haveDomElement {
 				parent.domElement.RemoveChild(element.domElement)
 			}
 			delete(renderer.markNodes, element)
